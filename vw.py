@@ -169,7 +169,7 @@ def random_murphy_sim(piles):
 def single_gambit(sim_type, agent_type, file, total_sims):
     points = []
     for piles in [1, 3, 5]:
-        file.write(f"{agent_type},{piles},{total_sims}, ,")
+        file.write(f"{agent_type},{piles},{total_sims}, , ,")
         for i in range(total_sims):
             points.append(sim_type(piles))
 
@@ -180,7 +180,10 @@ def single_gambit(sim_type, agent_type, file, total_sims):
         file.write(f"{failures},")
 
         for point in points:
-            file.write(f"{point},")
+            if point > MAX_STEPS:
+                file.write("FAIL,")
+            else:
+                file.write(f"{point},")
         file.write("\n")
         points.clear()
     return
@@ -193,7 +196,9 @@ def full_gambit():
 
     print("Running Full Gambit of Tests...")
     with open(output_file, "w") as file:
-        file.write("Agent, Dirt Piles, Sims, WIN ODDS, FAILURES, Points\n")
+        file.write("Agent, Dirt Piles, Sims, WIN ODDS, STD_DEV, FAILURES,"
+                   " Points\n")
+        file.write("FORMULAS,N/A,N/A,=(C2-F2)/C2,,=STDEV(G2:ALR2),N/A,\n")
         print("Reflex Agent Simulation")
         single_gambit(reflex_sim, "Reflex", file, total_sims)
         print("Random Agent Simulation")
