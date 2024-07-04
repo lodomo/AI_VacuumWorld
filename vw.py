@@ -1,19 +1,89 @@
-import random
+import sys
 import time
+
+from agents import Agent
+from map import Map
+
+# POINTS
+SUCCESS = -10  # Vacuumed successfully
+FAILURE = 10  # Vacuumed unsuccessfully, made a mess
+POINTLESS = 2  # Vacuumed a clean room
+MOVE = 1  # Moved to a new room
+NO_ACTION = 0  # No action taken
+DIRT_START = 10  # Points for each dirt pile at the start
+DIRT_LEFT = 100  # Points for each dirt pile left at the end
+
+MAX_STEPS = 10000
+TOTAL_SIMS = 1000
 
 
 def main():
-    agent = ReflexAgent()
-    map = Map(3, 3, 3)
-    agent.set_position(map.random_position())
+    print("Welcome to the Vacuum World Simulator 9000!")
+    menu()
+    return
+
+
+def get_yes_no_input(prompt):
+    while True:
+        response = input(prompt).lower()
+        if response in ["y", "yes"]:
+            return True
+        elif response in ["n", "no"]:
+            return False
+        else:
+            print("Invalid input. Please enter yes or no.")
+
+
+def menu():
+    while True:
+        print("1. Visual Reflex Agent Simulation")
+        print("2. Visual Random Agent Simulation")
+        print("3. Visual Murphy's Law Reflex Agent Simulation")
+        print("4. Visual Murphy's Law Random Agent Simulation")
+        print("5. Run a full gambit with reports")
+        print("0. Exit")
+
+        choice = input("Enter your choice: ")
+
+        match choice:
+            case "0":
+                print("Goodbye!")
+                exit()
+            case "1":
+                vis_reflex_sim()
+            case "2":
+                vis_random_sim()
+            case "3":
+                vis_reflex_murphy_sim()
+            case "4":
+                vis_random_murphy_sim()
+            case "5":
+                full_gambit()
+            case _:
+                print("Invalid choice. Please enter a number between 0 and 5.")
+
+
+def clear_screen():
+    print("\033[H\033[J")
+
+
+def visual_sim(max_steps=100, random=False, murphy=False):
+    dirt_piles = int(input("Enter the number of dirt piles: (1, 3, 5): "))
+
+    if dirt_piles > 9 or dirt_piles < 1:
+        print("Invalid number of dirt piles. Defaulting to 5.")
+        dirt_piles = 5
+
+    map = Map(3, 3, dirt_piles)
+    agent = Agent(position=map.random_position(), random=random, murphy=murphy)
     map.spread_dirt()
-    max_steps = 100
 
     while not map.all_clean():
         clear_screen()
         map.print(agent)
         agent.action(map.get_room(agent.position))
-        time.sleep(0.5)
+        print("Battery Remaining: ", max_steps)
+        time.sleep(0.25)
         max_steps -= 1
         if max_steps == 0:
             print("Max steps reached")
@@ -24,150 +94,123 @@ def main():
         map.print(agent)
         print("All clean!")
 
+
+def sim(max_steps=MAX_STEPS, random=False, murphy=False, dirt_piles=0):
+    steps = max_steps
+    map = Map(3, 3, dirt_piles)
+    agent = Agent(position=map.random_position(), random=random, murphy=murphy)
+    map.spread_dirt()
+    points = dirt_piles * DIRT_START
+    spinner = spinning_cursor()
+
+    for i in range(max_steps):
+        last_action = agent.action(map.get_room(agent.position))
+        points += add_points(last_action)
+        steps -= 1
+        if map.all_clean():
+            return points
+
+        if i % 1000 == 0:
+            sys.stdout.write(next(spinner))
+            sys.stdout.flush()
+            sys.stdout.write("\b")
+
+    remaining_dirt = map.dirt_piles
+    points += remaining_dirt * DIRT_LEFT
+    return points
+
+
+def add_points(action):
+    match action:
+        case "SUCK_SUCCESS":
+            return SUCCESS
+        case "SUCK_FAILURE":
+            return FAILURE
+        case "SUCK_POINTLESS":
+            return POINTLESS
+        case "MOVE":
+            return MOVE
+        case _:
+            return NO_ACTION
+
+
+def vis_reflex_sim():
+    visual_sim(random=False, murphy=False)
+
+
+def vis_random_sim():
+    visual_sim(random=True, murphy=False)
+
+
+def vis_reflex_murphy_sim():
+    visual_sim(random=False, murphy=True)
+
+
+def vis_random_murphy_sim():
+    visual_sim(random=True, murphy=True)
+
+
+def reflex_sim(piles):
+    return sim(random=False, murphy=False, dirt_piles=piles)
+
+
+def random_sim(piles):
+    return sim(random=True, murphy=False, dirt_piles=piles)
+
+
+def reflex_murphy_sim(piles):
+    return sim(random=False, murphy=True, dirt_piles=piles)
+
+
+def random_murphy_sim(piles):
+    return sim(random=True, murphy=True, dirt_piles=piles)
+
+
+def single_gambit(sim_type, agent_type, file, total_sims):
+    points = []
+    for piles in [1, 3, 5]:
+        file.write(f"{agent_type},{piles},{total_sims}, ,")
+        for i in range(total_sims):
+            points.append(sim_type(piles))
+
+        failures = 0
+        for point in points:
+            if point > MAX_STEPS:
+                failures += 1
+        file.write(f"{failures},")
+
+        for point in points:
+            file.write(f"{point},")
+        file.write("\n")
+        points.clear()
     return
 
 
-def clear_screen():
-    print("\033[H\033[J")
+def full_gambit():
+    total_sims = TOTAL_SIMS
+    # Create a CSV file
+    output_file = "data.csv"
+
+    print("Running Full Gambit of Tests...")
+    with open(output_file, "w") as file:
+        file.write("Agent, Dirt Piles, Sims, WIN ODDS, FAILURES, Points\n")
+        print("Reflex Agent Simulation")
+        single_gambit(reflex_sim, "Reflex", file, total_sims)
+        print("Random Agent Simulation")
+        single_gambit(random_sim, "Random", file, total_sims)
+        print("Reflex Murphy's Law Agent Simulation")
+        single_gambit(reflex_murphy_sim, "Reflex Murphy", file, total_sims)
+        print("Random Murphy's Law Agent Simulation")
+        single_gambit(random_murphy_sim, "Random Murphy", file, total_sims)
+        file.close()
+    print(f"All tests complete. Data written to {output_file}")
+    return
 
 
-class Room:
-    def __init__(self):
-        self.__dirty = False
-
-    @property
-    def dirty(self):
-        return self.__dirty
-
-    def __str__(self):
-        if self.__dirty:
-            return ""
-        else:
-            return " "
-
-    def clean(self):
-        self.__dirty = False
-
-    def make_dirty(self):
-        self.__dirty = True
-
-
-class Map:
-    def __init__(self, width, height, dirty_rooms):
-        self.width = width
-        self.height = height
-        self.rooms = [[Room() for _ in range(width)] for _ in range(height)]
-        self.dirty_rooms = dirty_rooms
-
-    def get_room(self, position):
-        return self.rooms[position[1]][position[0]]
-
-    def spread_dirt(self):
-        current_dirt = 0
-        while current_dirt < self.dirty_rooms:
-            pos = self.random_position()
-            if not self.rooms[pos[1]][pos[0]].dirty:
-                self.rooms[pos[1]][pos[0]].make_dirty()
-                current_dirt += 1
-
-    def random_position(self):
-        x = random.randint(0, self.width - 1)
-        y = random.randint(0, self.height - 1)
-        return (x, y)
-
-    def all_clean(self):
-        for row in self.rooms:
-            for room in row:
-                if room.dirty:
-                    return False
-        return True
-
-    def print_empty(self, width=3, chars=3):
-        print("█", end="")
-        for i in range(width):
-            for j in range(chars):
-                print("█", end="")
-            print("█", end="")
-        print("█", end="")
-        print("█", end="")
-        print()
-
-    def print(self, agent=None):
-        self.print_empty()
-
-        for x in range(self.width):
-            for y in range(self.height):
-                print("█", end="")
-                if agent and agent.position == (x, y):
-                    print(f"{agent}", end="")
-                else:
-                    print(" ", end="")
-                print(f"{self.rooms[y][x]} ", end="█")
-            print()
-            self.print_empty()
-
-
-class ReflexAgent:
-    # This agent will only work for a 3x3 room
-    # It will not clean space 0,0 if it does not start there.
-    def __init__(self, position=(-1, -1)):
-        self.__position = position
-
-    def __str__(self):
-        return "󰭆"
-
-    @property
-    def position(self):
-        return self.__position
-
-    def set_position(self, position):
-        self.__position = position
-
-    def action(self, room):
-        if room.dirty:
-            self.suck(room)
-        else:
-            self.move()
-
-    def move(self):
-        # D R D
-        # R U D
-        # U L L
-        match self.__position:
-            case (0, 0):
-                self.down()
-            case (0, 1):
-                self.right()
-            case (0, 2):
-                self.up()
-            case (1, 0):
-                self.right()
-            case (1, 1):
-                self.up()
-            case (1, 2):
-                self.left()
-            case (2, 0):
-                self.down()
-            case (2, 1):
-                self.down()
-            case (2, 2):
-                self.left()
-
-    def down(self):
-        self.__position = (self.__position[0], self.__position[1] + 1)
-
-    def up(self):
-        self.__position = (self.__position[0], self.__position[1] - 1)
-
-    def left(self):
-        self.__position = (self.__position[0] - 1, self.__position[1])
-
-    def right(self):
-        self.__position = (self.__position[0] + 1, self.__position[1])
-
-    def suck(self, room):
-        if room.dirty:
-            room.clean()
+def spinning_cursor():
+    while True:
+        for cursor in "|/-\\":
+            yield cursor
 
 
 if __name__ == "__main__":
